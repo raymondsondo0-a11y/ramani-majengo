@@ -18,7 +18,7 @@ jobs:
           server: ftpupload.net
           username: ${{ secrets.INFINITYFREE_FTP_USERNAME }}
           password: ${{ secrets.INFINITYFREE_FTP_PASSWORD }}
-          server-dir: /htdocs/
+          server-dir: /aicah.kesug.com/htdocs/
           protocol: ftp
           port: 21
           security: loose

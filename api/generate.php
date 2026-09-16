@@ -1,45 +1,17 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
-
-function out($ok,$message='', $extra=[]){http_response_code($ok?200:400);echo json_encode(array_merge(['ok'=>$ok,'message'=>$message],$extra),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
+function out($ok,$message='',$extra=[]){http_response_code($ok?200:400);echo json_encode(array_merge(['ok'=>$ok,'message'=>$message],$extra),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
 if($_SERVER['REQUEST_METHOD']!=='POST') out(false,'POST only');
-$raw=file_get_contents('php://input');$data=json_decode($raw,true);
-if(!is_array($data)) out(false,'Invalid JSON.');
-$rooms=$data['rooms']??[];
-if(!$rooms) out(false,'Ongeza angalau chumba kimoja.');
-$plotW=max(5,min(100,(float)($data['plot_width']??20)));$plotD=max(5,min(100,(float)($data['plot_depth']??30)));
-$cleanRooms=[];foreach(array_slice($rooms,0,30) as $r){$name=trim((string)($r['name']??'Room'));$w=max(1.5,min(15,(float)($r['w']??3.5)));$d=max(1.5,min(15,(float)($r['d']??3.5)));$cleanRooms[]=['name'=>$name?:'Room','w'=>$w,'d'=>$d];}
-$input=[
- 'project'=>trim((string)($data['project']??'House Project')),
- 'location'=>trim((string)($data['location']??'')),
- 'plot_width'=>$plotW,'plot_depth'=>$plotD,
- 'road_side'=>(string)($data['road_side']??'North'),
- 'style'=>(string)($data['style']??'Modern'),
- 'notes'=>trim((string)($data['notes']??'')),
- 'rooms'=>$cleanRooms
-];
-
-function fallback_plan($d){
-  $rooms=[];$totalW=0;$totalD=0;
-  foreach($d['rooms'] as $r){$rooms[]=['name'=>$r['name'],'width'=>round($r['w'],1),'depth'=>round($r['d'],1)];$totalW=max($totalW,$r['w']);$totalD+=$r['d'];}
-  $houseW=min($d['plot_width']-2,$totalW*2+1);$houseD=min($d['plot_depth']-2,max(8,$totalD/2+2));
-  return ['title'=>strtoupper($d['project']),'summary'=>'Concept ya awali iliyopangwa kutokana na mahitaji yaliyowekwa.','house_width'=>round($houseW,1),'house_depth'=>round($houseD,1),'measurements'=>'Jengo la concept: '.round($houseW,1).' m × '.round($houseD,1).' m. Kiwanja: '.$d['plot_width'].' m × '.$d['plot_depth'].' m.','room_experience'=>'Entrance inaelekezwa upande wa '.$d['road_side'].'. Living room hutumika kama circulation hub kuelekea dining, kitchen na bedroom corridor.','outside_preview'=>'Muonekano wa nje wa concept una façade rahisi, veranda/entrance, windows na pitched roof; style: '.$d['style'].'.','rooms'=>$rooms];
-}
-
-$key=getenv('OPENAI_API_KEY');
-if(!$key){out(true,'AI key haijawekwa; nimetengeneza concept ya msingi.', ['plan'=>fallback_plan($input),'ai'=>false]);}
-
-$system='You are an architectural space-planning assistant. Create a PRELIMINARY residential concept, not a certified construction drawing. Never claim structural safety, code compliance, permit approval, soil suitability, or readiness to build. Use metric units. Respect plot dimensions, road side, requested rooms and notes. Return ONLY valid JSON with exactly these keys: title, summary, house_width, house_depth, measurements, room_experience, outside_preview, rooms. rooms is an array of objects with name,width,depth. Make room dimensions realistic and keep the house inside the plot with reasonable setbacks. Keep the requested room names, but you may add a circulation/hall if useful. Measurements should explain the overall footprint and important room dimensions. room_experience should describe movement from entrance through common areas to private rooms. outside_preview should describe the exterior view. Do not include markdown.';
-$user='Project requirements:\n'.json_encode($input,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
-$body=json_encode(['model'=>'gpt-5.6-luna','input'=>[['role'=>'system','content'=>$system],['role'=>'user','content'=>$user]],'max_output_tokens'=>3500],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-$ch=curl_init('https://api.openai.com/v1/responses');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>45,CURLOPT_HTTPHEADER=>['Content-Type: application/json','Authorization: Bearer '.$key],CURLOPT_POSTFIELDS=>$body]);$res=curl_exec($ch);$http=curl_getinfo($ch,CURLINFO_HTTP_CODE);$err=curl_error($ch);curl_close($ch);
-if($res===false||$http<200||$http>=300){out(true,'AI service haikupatikana kwa sasa; nimetengeneza concept ya msingi.', ['plan'=>fallback_plan($input),'ai'=>false,'detail'=>$err?:'HTTP '.$http]);}
-$j=json_decode($res,true);$text=$j['output_text']??'';
-if(!$text && isset($j['output'])){foreach($j['output'] as $item){foreach(($item['content']??[]) as $c){if(isset($c['text'])){$text.=$c['text'];}}}}
-$text=trim($text);$text=preg_replace('/^```(?:json)?\s*|\s*```$/i','',$text);$plan=json_decode($text,true);
-if(!is_array($plan)||empty($plan['rooms'])){out(true,'AI ilirudisha jibu lisiloweza kuchorwa; nimetengeneza fallback.', ['plan'=>fallback_plan($input),'ai'=>false]);}
-// Normalize room keys for the frontend.
-$normalized=[];foreach($plan['rooms'] as $r){$normalized[]=['name'=>(string)($r['name']??'Room'),'width'=>(float)($r['width']??3.5),'depth'=>(float)($r['depth']??3.5)];}
-$plan['rooms']=$normalized;$plan['house_width']=(float)($plan['house_width']??12);$plan['house_depth']=(float)($plan['house_depth']??10);$plan['title']=(string)($plan['title']??$input['project']);
-out(true,'AI concept generated.',['plan'=>$plan,'ai'=>true]);
+$data=json_decode(file_get_contents('php://input'),true);if(!is_array($data)) out(false,'Invalid JSON.');
+$rooms=$data['rooms']??[];if(!$rooms) out(false,'Ongeza angalau chumba kimoja.');
+$plotW=(float)($data['plot_width']??0);$plotD=(float)($data['plot_depth']??0);if($plotW<5||$plotD<5) out(false,'Weka vipimo halali vya kiwanja: upana na urefu, kwa mita.');
+$cleanRooms=[];foreach(array_slice($rooms,0,40) as $r){$name=trim((string)($r['name']??''));if($name==='')continue;$w=isset($r['w'])&&$r['w']!==null&&$r['w']!==''?(float)$r['w']:null;$d=isset($r['d'])&&$r['d']!==null&&$r['d']!==''?(float)$r['d']:null;if($w!==null)$w=max(1.5,min(15,$w));if($d!==null)$d=max(1.5,min(15,$d));$cleanRooms[]=['name'=>$name,'w'=>$w,'d'=>$d];}if(!$cleanRooms)out(false,'Ongeza angalau chumba kimoja na andika jina lake.');
+$input=['project'=>trim((string)($data['project']??'House Project')),'client'=>trim((string)($data['client']??'')),'contact'=>trim((string)($data['contact']??'')),'location'=>trim((string)($data['location']??'')),'plot_width'=>$plotW,'plot_depth'=>$plotD,'road_side'=>(string)($data['road_side']??'North'),'style'=>trim((string)($data['style']??'')),'notes'=>trim((string)($data['notes']??'')),'rooms'=>$cleanRooms];
+function fallback_plan($d){$rooms=[];$knownArea=0;$unknown=0;foreach($d['rooms'] as $r){$w=$r['w'];$dep=$r['d'];if($w===null||$dep===null){$unknown++;$w=3.5;$dep=3.5;}$rooms[]=['name'=>$r['name'],'width'=>round($w,1),'depth'=>round($dep,1)];$knownArea+=($w*$dep);}$houseW=min($d['plot_width']-2,max(8,round(sqrt(max($knownArea,80)*1.45),1)));$houseD=min($d['plot_depth']-2,max(8,round(max(8,$knownArea/$houseW+3),1)));return ['title'=>strtoupper($d['project']?:'HOUSE PROJECT'),'summary'=>'Concept ya awali imetengenezwa kutoka kwenye brief ya mteja na vipimo vya kiwanja. '.($unknown?'Baadhi ya vipimo vya rooms havikutolewa, hivyo fallback imetumia makadirio ya concept; AI inahitajika kwa kupanga kwa undani.':''),'house_width'=>$houseW,'house_depth'=>$houseD,'measurements'=>'Kiwanja: '.$d['plot_width'].' m × '.$d['plot_depth'].' m. Footprint ya concept: '.$houseW.' m × '.$houseD.' m.','room_experience'=>'Entrance kutoka upande wa '.$d['road_side'].'; public spaces zinapaswa kutenganishwa na private bedroom zone.','outside_preview'=>'Exterior direction: '.$d['style'].'; façade yenye depth, roofline yenye character, glazing, entrance porch na landscaping kulingana na brief: '.$d['notes'],'rooms'=>$rooms];}
+$key=getenv('OPENAI_API_KEY');if(!$key)out(true,'AI key haijawekwa; fallback concept imetengenezwa.',['plan'=>fallback_plan($input),'ai'=>false]);
+$system='You are a serious architectural space-planning assistant. Create a PRELIMINARY residential architectural concept, not a certified construction drawing. Use metric units. Do not invent client requirements. Treat blank room dimensions as intentionally unspecified and choose dimensions intelligently from room function, circulation, plot size, setbacks and the client brief. Respect the plot and road side. Do not force default dimensions such as 3.5 x 3.5. Preserve requested room names. You may add circulation spaces only when justified. The client wants a visually sophisticated, realistic house rather than a generic rectangular box. Use the requested style and notes to describe massing, roofline, façade composition, windows, materials, entrance, outdoor areas and landscaping. Keep exterior description consistent with the floor-plan concept. Return ONLY valid JSON with exactly these keys: title, summary, house_width, house_depth, measurements, room_experience, outside_preview, rooms. rooms is an array of objects with name,width,depth. Make dimensions realistic and ensure the footprint fits inside the plot. Mention that this is preliminary concept planning, not structural/permit approval.';
+$user='CLIENT BRIEF:\n'.json_encode($input,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);$body=json_encode(['model'=>'gpt-5.6-luna','input'=>[['role'=>'system','content'=>$system],['role'=>'user','content'=>$user]],'max_output_tokens'=>4500],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+$ch=curl_init('https://api.openai.com/v1/responses');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>45,CURLOPT_HTTPHEADER=>['Content-Type: application/json','Authorization: Bearer '.$key],CURLOPT_POSTFIELDS=>$body]);$res=curl_exec($ch);$http=curl_getinfo($ch,CURLINFO_HTTP_CODE);$err=curl_error($ch);curl_close($ch);if($res===false||$http<200||$http>=300)out(true,'AI service haikupatikana kwa sasa; fallback concept imetengenezwa.',['plan'=>fallback_plan($input),'ai'=>false,'detail'=>$err?:'HTTP '.$http]);
+$j=json_decode($res,true);$text=$j['output_text']??'';if(!$text&&isset($j['output']))foreach($j['output'] as $item)foreach(($item['content']??[]) as $c)if(isset($c['text']))$text.=$c['text'];$text=trim($text);$text=preg_replace('/^```(?:json)?\s*|\s*```$/i','',$text);$plan=json_decode($text,true);if(!is_array($plan)||empty($plan['rooms']))out(true,'AI ilirudisha jibu lisiloweza kuchorwa; fallback concept imetengenezwa.',['plan'=>fallback_plan($input),'ai'=>false]);
+$normalized=[];foreach($plan['rooms'] as $r){$normalized[]=['name'=>(string)($r['name']??'Room'),'width'=>(float)($r['width']??3.5),'depth'=>(float)($r['depth']??3.5)];}$plan['rooms']=$normalized;$plan['house_width']=(float)($plan['house_width']??12);$plan['house_depth']=(float)($plan['house_depth']??10);$plan['title']=(string)($plan['title']??$input['project']);out(true,'AI concept generated.',['plan'=>$plan,'ai'=>true]);

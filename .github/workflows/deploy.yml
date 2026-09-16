@@ -12,6 +12,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare server-only OpenAI configuration
+        shell: bash
+        run: |
+          mkdir -p api
+          KEY_B64="$(printf '%s' "${{ secrets.OPENAI_API_KEY }}" | base64 -w 0)"
+          printf "<?php return base64_decode('%s');\n" "$KEY_B64" > api/openai-config.php
+
       - name: Deploy to InfinityFree
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:

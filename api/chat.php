@@ -15,16 +15,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 
 $raw = file_get_contents('php://input');
 $input = json_decode($raw ?: '', true);
-if (!is_array($input)) {
-    $input = $_POST;
-}
+if (!is_array($input)) $input = $_POST;
 
 $conversation = $input['conversation'] ?? [];
-if (is_string($conversation)) {
-    $conversation = [['role' => 'user', 'content' => $conversation]];
-}
+if (is_string($conversation)) $conversation = [['role' => 'user', 'content' => $conversation]];
 if (!is_array($conversation) || count($conversation) === 0) {
-    reply_json(false, 'Hakuna ujumbe wa mazungumzo uliotumwa.', ['error_code' => 'EMPTY_CONVERSATION'], 200);
+    reply_json(false, 'Hakuna ujumbe wa mazungumzo uliotumwa.', ['error_code' => 'EMPTY_CONVERSATION']);
 }
 
 $key = getenv('OPENAI_API_KEY');
@@ -33,9 +29,7 @@ if (!$key && is_file(__DIR__ . '/openai-config.php')) {
     $key = $OPENAI_API_KEY ?? '';
 }
 $key = trim((string)$key);
-if ($key === '') {
-    reply_json(false, 'OpenAI API key haijawekwa kwenye server.', ['error_code' => 'MISSING_API_KEY'], 200);
-}
+if ($key === '') reply_json(false, 'OpenAI API key haijawekwa kwenye server.', ['error_code' => 'MISSING_API_KEY']);
 
 $system = <<<'PROMPT'
 You are Ramani Majengo, a serious conversational architectural space-planning assistant. You are not a form validator and you must not behave like a childish scripted chatbot.
@@ -63,108 +57,61 @@ foreach ($conversation as $m) {
     if (!is_array($m)) continue;
     $role = (($m['role'] ?? '') === 'assistant') ? 'assistant' : 'user';
     $content = trim((string)($m['content'] ?? ''));
-    if ($content !== '') {
-        $messages[] = ['role' => $role, 'content' => $content];
-    }
+    if ($content !== '') $messages[] = ['role' => $role, 'content' => $content];
 }
-
-if (count($messages) < 2) {
-    reply_json(false, 'Ujumbe wa mtumiaji haukupokelewa vizuri.', ['error_code' => 'INVALID_CONVERSATION'], 200);
-}
+if (count($messages) < 2) reply_json(false, 'Ujumbe wa mtumiaji haukupokelewa vizuri.', ['error_code' => 'INVALID_CONVERSATION']);
 
 $body = json_encode([
     'model' => 'gpt-5.6-luna',
     'input' => $messages,
-    'text' => [
-        'format' => ['type' => 'json_object']
-    ],
+    'text' => ['format' => ['type' => 'json_object']],
     'max_output_tokens' => 1800
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-if ($body === false) {
-    reply_json(false, 'Server imeshindwa kuandaa ombi la AI.', ['error_code' => 'REQUEST_ENCODING'], 200);
-}
+if ($body === false) reply_json(false, 'Server imeshindwa kuandaa ombi la AI.', ['error_code' => 'REQUEST_ENCODING']);
 
 function openai_request(string $url, string $body, string $key): array {
-    if (!function_exists('curl_init')) {
-        return ['ok' => false, 'http' => 0, 'body' => '', 'error' => 'PHP cURL extension haipatikani.'];
-    }
-
+    if (!function_exists('curl_init')) return ['ok' => false, 'http' => 0, 'body' => '', 'error' => 'PHP cURL extension haipatikani.'];
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 15,
         CURLOPT_TIMEOUT => 60,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Accept: application/json',
-            'Authorization: Bearer ' . $key
-        ],
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json', 'Authorization: Bearer ' . $key],
         CURLOPT_POSTFIELDS => $body,
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2
     ]);
-
     $res = curl_exec($ch);
     $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err = curl_error($ch);
     curl_close($ch);
-
-    return [
-        'ok' => ($res !== false && $http >= 200 && $http < 300),
-        'http' => $http,
-        'body' => ($res === false ? '' : (string)$res),
-        'error' => $err
-    ];
+    return ['ok' => ($res !== false && $http >= 200 && $http < 300), 'http' => $http, 'body' => ($res === false ? '' : (string)$res), 'error' => $err];
 }
 
 $result = openai_request('https://api.openai.com/v1/responses', $body, $key);
-
 if (!$result['ok']) {
     $provider = json_decode($result['body'], true);
     $providerMessage = $provider['error']['message'] ?? '';
     $providerCode = $provider['error']['code'] ?? '';
     $http = (int)$result['http'];
     $safeMessage = $providerMessage ?: ($result['error'] ?: ('OpenAI request failed with HTTP ' . ($http ?: '0')));
-
-    // Keep the HTTP response 200 so the frontend can display the real diagnostic
-    // instead of replacing it with a generic network error.
-    reply_json(false, 'AI service error: ' . $safeMessage, [
-        'error_code' => $providerCode ?: 'OPENAI_REQUEST_FAILED',
-        'http_status' => $http
-    ], 200);
+    reply_json(false, 'AI service error: ' . $safeMessage, ['error_code' => $providerCode ?: 'OPENAI_REQUEST_FAILED', 'http_status' => $http]);
 }
 
 $j = json_decode($result['body'], true);
-if (!is_array($j)) {
-    reply_json(false, 'OpenAI ilirudisha majibu yasiyoeleweka.', [
-        'error_code' => 'INVALID_PROVIDER_RESPONSE',
-        'http_status' => (int)$result['http']
-    ], 200);
-}
+if (!is_array($j)) reply_json(false, 'OpenAI ilirudisha majibu yasiyoeleweka.', ['error_code' => 'INVALID_PROVIDER_RESPONSE']);
 
 $text = $j['output_text'] ?? '';
 if (!$text && isset($j['output']) && is_array($j['output'])) {
-    foreach ($j['output'] as $item) {
-        foreach (($item['content'] ?? []) as $c) {
-            if (isset($c['text'])) {
-                $text .= $c['text'];
-            }
-        }
-    }
+    foreach ($j['output'] as $item) foreach (($item['content'] ?? []) as $c) if (isset($c['text'])) $text .= $c['text'];
 }
-
 $text = trim((string)$text);
 $text = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $text);
 $out = json_decode(trim($text), true);
-
 if (!is_array($out)) {
-    reply_json(false, 'AI ilirudisha JSON isiyoweza kusomwa.', [
-        'error_code' => 'INVALID_AI_JSON',
-        'http_status' => (int)$result['http'],
-        'raw_preview' => mb_substr($text, 0, 300)
-    ], 200);
+    reply_json(false, 'AI ilirudisha JSON isiyoweza kusomwa.', ['error_code' => 'INVALID_AI_JSON', 'raw_preview' => mb_substr($text, 0, 300)]);
 }
 
 $out['message'] = trim((string)($out['message'] ?? 'Nimepokea mahitaji yako.'));
@@ -174,8 +121,8 @@ $out['plot_depth'] = isset($out['plot_depth']) && is_numeric($out['plot_depth'])
 $out['bedrooms'] = isset($out['bedrooms']) && is_numeric($out['bedrooms']) ? (int)$out['bedrooms'] : null;
 $out['total_spaces'] = isset($out['total_spaces']) && is_numeric($out['total_spaces']) ? (int)$out['total_spaces'] : null;
 $out['courtyard'] = (bool)($out['courtyard'] ?? false);
-out['style'] = (string)($out['style'] ?? '');
-out['requirements'] = is_array($out['requirements'] ?? null) ? array_values($out['requirements']) : [];
-out['missing'] = is_array($out['missing'] ?? null) ? array_values($out['missing']) : [];
+$out['style'] = (string)($out['style'] ?? '');
+$out['requirements'] = is_array($out['requirements'] ?? null) ? array_values($out['requirements']) : [];
+$out['missing'] = is_array($out['missing'] ?? null) ? array_values($out['missing']) : [];
 
-reply_json(true, $out['message'], ['reply' => $out], 200);
+reply_json(true, $out['message'], ['reply' => $out]);

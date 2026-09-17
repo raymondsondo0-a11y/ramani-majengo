@@ -17,7 +17,7 @@ jobs:
         run: |
           mkdir -p api
           KEY_B64="$(printf '%s' "${{ secrets.OPENAI_API_KEY }}" | base64 -w 0)"
-          printf "<?php\n$OPENAI_API_KEY = base64_decode('%s');\n" "$KEY_B64" > api/openai-config.php
+          printf "<?php\n\$OPENAI_API_KEY = base64_decode('%s');\n" "$KEY_B64" > api/openai-config.php
 
       - name: Deploy to InfinityFree
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

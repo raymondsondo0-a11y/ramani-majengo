@@ -67,14 +67,14 @@ function ask_ai($key, $system, $user, $repair = '') {
         ['role' => 'user', 'content' => $user]
     ];
     if ($repair !== '') $input[] = ['role' => 'user', 'content' => $repair];
-    $body = json_encode(['model' => 'gpt-4.1-mini', 'input' => $input, 'max_output_tokens' => 5000], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $body = json_encode(['model' => 'gpt-4.1-mini', 'input' => $input, 'text' => ['format' => ['type' => 'json_object']], 'max_output_tokens' => 5000], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $ch = curl_init('https://api.openai.com/v1/responses');
     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60, CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key], CURLOPT_POSTFIELDS => $body]);
     $res = curl_exec($ch);
     $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err = curl_error($ch);
     curl_close($ch);
-    if ($res === false || $http < 200 || $http >= 300) return [null, 'AI request failed: ' . ($err ?: 'HTTP ' . $http)];
+    if ($res === false || $http < 200 || $http >= 300) { $provider = json_decode((string)$res, true); $detail = $provider['error']['message'] ?? ''; return [null, 'AI request failed: ' . ($detail ?: ($err ?: 'HTTP ' . $http))]; }
     $j = json_decode($res, true);
     $text = $j['output_text'] ?? '';
     if (!$text && isset($j['output'])) foreach ($j['output'] as $item) foreach (($item['content'] ?? []) as $c) if (isset($c['text'])) $text .= $c['text'];

@@ -67,7 +67,7 @@ function ask_ai($key, $system, $user, $repair = '') {
         ['role' => 'user', 'content' => $user]
     ];
     if ($repair !== '') $input[] = ['role' => 'user', 'content' => $repair];
-    $body = json_encode(['model' => 'gpt-5.6-luna', 'input' => $input, 'max_output_tokens' => 5000], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $body = json_encode(['model' => 'gpt-4.1-mini', 'input' => $input, 'max_output_tokens' => 5000], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $ch = curl_init('https://api.openai.com/v1/responses');
     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60, CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $key], CURLOPT_POSTFIELDS => $body]);
     $res = curl_exec($ch);

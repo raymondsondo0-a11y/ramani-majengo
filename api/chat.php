@@ -62,7 +62,7 @@ foreach ($conversation as $m) {
 if (count($messages) < 2) reply_json(false, 'Ujumbe wa mtumiaji haukupokelewa vizuri.', ['error_code' => 'INVALID_CONVERSATION']);
 
 $body = json_encode([
-    'model' => 'gpt-5.6-luna',
+    'model' => 'gpt-4.1-mini',
     'input' => $messages,
     'text' => ['format' => ['type' => 'json_object']],
     'max_output_tokens' => 1800
